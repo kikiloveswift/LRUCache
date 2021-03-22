@@ -13,7 +13,7 @@ static const char *kLRUCacheQueue = "kLRUCacheQueue";
 
 @interface LRUCache ()
 @property (nonatomic, strong) NSMutableDictionary *dictionary;
-@property (nonatomic, strong) LRUCacheNode *rootNode;
+@property (nonatomic, strong) LRUCacheNode *headNode;
 @property (nonatomic, strong) LRUCacheNode *tailNode;
 @property (nonatomic) NSUInteger size;
 @property (nonatomic, strong) dispatch_queue_t queue;
@@ -35,7 +35,7 @@ static const char *kLRUCacheQueue = "kLRUCacheQueue";
     if (self) {
         [self commonSetup];
         _capacity = [aDecoder decodeIntegerForKey:@"kLRUCacheCapacityCoderKey"];
-        _rootNode = [aDecoder decodeObjectForKey:@"kLRUCacheRootNodeCoderKey"];
+        _headNode = [aDecoder decodeObjectForKey:@"kLRUCacheRootNodeCoderKey"];
         _tailNode = [aDecoder decodeObjectForKey:@"kLRUCacheTailNodeCoderKey"];
         _dictionary = [aDecoder decodeObjectForKey:@"kLRUCacheDictionaryCoderKey"];
         _size = [aDecoder decodeIntegerForKey:@"kLRUCacheSizeCoderKey"];
@@ -45,8 +45,8 @@ static const char *kLRUCacheQueue = "kLRUCacheQueue";
 
 - (void)encodeWithCoder:(NSCoder *)aCoder {
     [aCoder encodeInteger:self.capacity forKey:@"kLRUCacheCapacityCoderKey"];
-    [aCoder encodeObject:self.rootNode forKey:@"kLRUCacheRootNodeCoderKey"];
-    [aCoder encodeObject:self.rootNode forKey:@"kLRUCacheTailNodeCoderKey"];
+    [aCoder encodeObject:self.headNode forKey:@"kLRUCacheRootNodeCoderKey"];
+    [aCoder encodeObject:self.headNode forKey:@"kLRUCacheTailNodeCoderKey"];
     [aCoder encodeObject:self.dictionary forKey:@"kLRUCacheDictionaryCoderKey"];
     [aCoder encodeInteger:self.size forKey:@"kLRUCacheSizeCoderKey"];
 }
@@ -54,6 +54,10 @@ static const char *kLRUCacheQueue = "kLRUCacheQueue";
 - (void)commonSetup {
     _dictionary = [NSMutableDictionary dictionary];
     _queue = dispatch_queue_create(kLRUCacheQueue, 0);
+    _headNode = [LRUCacheNode new];
+    _tailNode = [LRUCacheNode new];
+    _headNode.next = _tailNode;
+    _tailNode.prev = _headNode;
 }
 
 #pragma mark - set object / get object methods
@@ -67,63 +71,60 @@ static const char *kLRUCacheQueue = "kLRUCacheQueue";
         if (node == nil) {
             node = [LRUCacheNode nodeWithValue:object key:key];
             self.dictionary[key] = node;
+            [self addToHead:node];
             self.size++;
-            
-            if (self.tailNode == nil) {
-                self.tailNode = node;
-            }
-            if (self.rootNode == nil) {
-                self.rootNode = node;
-            }
+            [self checkSpace];
+        } else {
+            node.value = object;
+            [self moveToHead:node];
         }
-        
-        [self putNodeToTop:node];
-        [self checkSpace];
-        
     });
 }
 
 
 - (id)objectForKey:(id<NSCopying>)key {
-    __block LRUCacheNode *node = nil;
+    __block id value = nil;
     
     dispatch_sync(self.queue, ^{
-        node = self.dictionary[key];
-        
+        LRUCacheNode *node = self.dictionary[key];
         if (node) {
-            [self putNodeToTop:node];
+            [self moveToHead:node];
+            value = node.value;
         }
-        
     });
     
-    return node.value;
+    return value;
 }
 
 #pragma mark - helper methods
 
-- (void)putNodeToTop:(LRUCacheNode *)node {
-    
-    if (node == self.rootNode) {
-        return;
-    }
-    
-    if (node == self.tailNode) {
-        self.tailNode = self.tailNode.prev;
-    }
-    
-    self.rootNode.prev.next = node.next;
-    
-    LRUCacheNode *prevRoot = self.rootNode;
-    self.rootNode = node;
-    self.rootNode.next = prevRoot;
+- (void)addToHead:(LRUCacheNode *)node {
+    node.prev = self.headNode;
+    node.next = self.headNode.next;
+    self.headNode.next.prev = node;
+    self.headNode.next = node;
+}
+
+- (void)moveToHead:(LRUCacheNode *)node {
+    [self removeNode:node];
+    [self addToHead:node];
+}
+
+- (void)removeNode:(LRUCacheNode *)node {
+    node.prev.next = node.next;
+    node.next.prev = node.prev;
+}
+
+- (LRUCacheNode *)removeTail {
+    LRUCacheNode *node = self.tailNode.prev;
+    [self removeNode:node];
+    return node;
 }
 
 - (void)checkSpace {
     if (self.size > self.capacity) {
-        LRUCacheNode *nextTail = self.tailNode.prev;
-        [self.dictionary removeObjectForKey:self.tailNode.key];
-        self.tailNode = nextTail;
-        self.tailNode.next = nil;
+        LRUCacheNode *removeNode = [self removeTail];
+        [self.dictionary removeObjectForKey:removeNode.key];
         self.size--;
     }
 }

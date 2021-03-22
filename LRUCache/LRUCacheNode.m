@@ -9,7 +9,6 @@
 #import "LRUCacheNode.h"
 
 @interface LRUCacheNode ()
-@property (nonatomic, strong, readwrite) id value;
 @property (nonatomic, strong, readwrite) id<NSCopying> key;
 @end
 

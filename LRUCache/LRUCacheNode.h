@@ -10,7 +10,7 @@
 
 @interface LRUCacheNode : NSObject<NSCoding>
 
-@property (nonatomic, strong, readonly) id value;
+@property (nonatomic, strong) id value;
 @property (nonatomic, strong, readonly) id<NSCopying> key;
 @property (nonatomic, strong) LRUCacheNode *next;
 @property (nonatomic, strong) LRUCacheNode *prev;

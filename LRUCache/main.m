@@ -14,26 +14,26 @@ int main(int argc, const char * argv[]) {
 
         // initial state of cache with capacity 3
         //      -,-,-
-        LRUCache *cache = [[LRUCache alloc] initWithCapacity:3];
+        LRUCache *cache = [[LRUCache alloc] initWithCapacity:4];
         
         // add 1
-        //      1,-,-
+        //      1,-,-,-
         [cache setObject:@"1" forKey:@"1"];
 
         // add 2
-        //      2,1,-
+        //      2,1,-,-
         [cache setObject:@"2" forKey:@"2"];
         
         // add 3
-        //      3,2,1
+        //      3,2,1,-
         [cache setObject:@"3" forKey:@"3"];
         
         // add 4
-        //      4,3,2       (1 removed as least recently used)
+        //      4,3,2,1       (1 removed as least recently used)
         [cache setObject:@"4" forKey:@"4"];
 
         // request 2
-        //      2,4,3       (2 goes to the top as most recently used)
+        //      2,4,3, 1      (2 goes to the top as most recently used)
         NSLog(@"%@", [cache objectForKey:@"2"]);
 
         // add 5
